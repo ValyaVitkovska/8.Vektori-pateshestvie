@@ -904,30 +904,62 @@
             margin-top: 0.9rem;
         }
         .intro-mode-btn {
+            position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 0.1rem;
-            min-height: 52px;
-            padding: 0.55rem 0.5rem;
+            gap: 0.15rem;
+            min-height: 68px;
+            padding: 0.75rem 0.6rem 0.6rem;
             border-radius: 1rem;
-            border: 2px solid #cbd5e1;
-            background: #f8fafc;
-            color: #334155;
+            border: 2px solid transparent;
             font-size: 0.86rem;
             font-weight: 800;
-            line-height: 1.15;
-            transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
+            line-height: 1.2;
+            transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
         }
-        .intro-mode-btn small { font-weight: 700; font-size: 0.68rem; color: inherit; opacity: 0.85; }
+        .intro-mode-icon { font-size: 1.3rem; line-height: 1; }
+        .intro-mode-btn small { display: block; font-weight: 700; font-size: 0.66rem; color: inherit; opacity: 0.85; margin-top: 0.1rem; }
+        .intro-mode-check {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.64rem;
+            color: #ffffff;
+        }
         .intro-mode-btn:hover { transform: translateY(-1px); }
-        .intro-mode-btn[aria-pressed="true"] {
-            border-color: #2563eb;
-            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        .intro-mode-btn[aria-pressed="false"] { opacity: 0.68; }
+        .intro-mode-btn-full {
+            background: #eff6ff;
             color: #1e3a8a;
-            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
+            border-color: #bfdbfe;
         }
+        .intro-mode-btn-full[aria-pressed="true"] {
+            opacity: 1;
+            border-color: #2563eb;
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.26);
+        }
+        .intro-mode-btn-full[aria-pressed="true"] .intro-mode-check { display: inline-flex; background: #2563eb; }
+        .intro-mode-btn-demo {
+            background: #fffbeb;
+            color: #92400e;
+            border-color: #fde68a;
+        }
+        .intro-mode-btn-demo[aria-pressed="true"] {
+            opacity: 1;
+            border-color: #d97706;
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            box-shadow: 0 6px 16px rgba(217, 119, 6, 0.26);
+        }
+        .intro-mode-btn-demo[aria-pressed="true"] .intro-mode-check { display: inline-flex; background: #d97706; }
         .intro-rules-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1499,11 +1531,17 @@
                     </div>
 
                     <div class="intro-mode-toggle" role="radiogroup" aria-label="Продължителност на мисията">
-                        <button type="button" id="mode-full" class="intro-mode-btn" aria-pressed="true" onclick="setGameMode('full')">
-                            🌍 <span>Пълно пътешествие</span><small>20 задачи</small>
+                        <button type="button" id="mode-full" class="intro-mode-btn intro-mode-btn-full" aria-pressed="true" onclick="setGameMode('full')">
+                            <span class="intro-mode-check" aria-hidden="true">✓</span>
+                            <span class="intro-mode-icon" aria-hidden="true">🌍</span>
+                            <span>Пълно пътешествие</span>
+                            <small>20 задачи · 18 държави · МКС</small>
                         </button>
-                        <button type="button" id="mode-demo" class="intro-mode-btn" aria-pressed="false" onclick="setGameMode('demo')">
-                            ⚡ <span>Бързо демо</span><small>5 задачи</small>
+                        <button type="button" id="mode-demo" class="intro-mode-btn intro-mode-btn-demo" aria-pressed="false" onclick="setGameMode('demo')">
+                            <span class="intro-mode-check" aria-hidden="true">✓</span>
+                            <span class="intro-mode-icon" aria-hidden="true">⚡</span>
+                            <span>Бързо демо</span>
+                            <small>само 5 избрани задачи</small>
                         </button>
                     </div>
 
@@ -2217,21 +2255,38 @@
             }
         }
 
-        function speakWelcomeWithSynthesis(welcome) {
+        function speakWelcomeWithSynthesis(welcome, attempt = 0) {
             if(!('speechSynthesis' in window)) return;
-            if(window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-                window.speechSynthesis.cancel();
-            }
-            const utterance = new SpeechSynthesisUtterance(welcome.text);
-            utterance.lang = welcome.lang;
-            utterance.rate = 0.9;
-            utterance.pitch = 1;
+            const synth = window.speechSynthesis;
 
+            // Ако гласовете все още не са заредени (чест случай при първо извикване в някои браузъри),
+            // изчакваме кратко и опитваме отново, вместо да замълчим.
             const voices = cachedVoices.length ? cachedVoices : refreshVoices();
-            const exactVoice = voices.find(voice => voice.lang.toLowerCase() === welcome.lang.toLowerCase());
-            const languagePrefix = welcome.lang.split('-')[0].toLowerCase();
-            utterance.voice = exactVoice || voices.find(voice => voice.lang.toLowerCase().startsWith(languagePrefix)) || null;
-            window.speechSynthesis.speak(utterance);
+            if(!voices.length && attempt < 5) {
+                setTimeout(() => speakWelcomeWithSynthesis(welcome, attempt + 1), 150);
+                return;
+            }
+
+            const doSpeak = () => {
+                const utterance = new SpeechSynthesisUtterance(welcome.text);
+                utterance.lang = welcome.lang;
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                const exactVoice = voices.find(voice => voice.lang.toLowerCase() === welcome.lang.toLowerCase());
+                const languagePrefix = welcome.lang.split('-')[0].toLowerCase();
+                utterance.voice = exactVoice || voices.find(voice => voice.lang.toLowerCase().startsWith(languagePrefix)) || null;
+                synth.resume();
+                synth.speak(utterance);
+            };
+
+            // Известна особеност в Chrome: извикване на speak() веднага след cancel() понякога
+            // тихо не проговаря. Малко закъснение прави поведението надеждно във всички браузъри.
+            if(synth.speaking || synth.pending) {
+                synth.cancel();
+                setTimeout(doSpeak, 60);
+            } else {
+                doSpeak();
+            }
         }
 
         function speakWelcome(country) {
@@ -3895,6 +3950,15 @@
 
         function nextQuestion() {
             hideModal('modal-correct', false);
+
+            // Защитна мярка: с изчерпано гориво няма опция за преминаване към следваща локация —
+            // задължително се преминава през аварийната задача (нормалният път вече го гарантира,
+            // тъй като горивото никога не е 0 точно след верен отговор; това е допълнителна защита).
+            if(gameState.fuel <= 0) {
+                gameState.emergencyPending = true;
+                startEmergencyMode();
+                return;
+            }
 
             if(gameState.currentIndex >= gameState.questions.length - 1) {
                 finishGame();

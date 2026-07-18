@@ -1402,7 +1402,7 @@
         <div class="flex items-center gap-3">
             <span class="text-3xl">✈️</span>
             <div>
-                <h1 class="text-xl md:text-2xl font-extrabold text-blue-900 tracking-tight">Околосветско Пътешествие</h1>
+                <h1 class="text-xl md:text-2xl font-extrabold text-blue-900 tracking-tight">Околосветско пътешествие</h1>
                 <p class="text-sm text-blue-600 font-semibold">Мисия: Вектори (8. клас)</p>
             </div>
             <button id="sound-toggle" onclick="toggleSound()" type="button" aria-label="Изключване на звука" title="Включване или изключване на поздравите"
@@ -2269,12 +2269,19 @@
 
             const doSpeak = () => {
                 const utterance = new SpeechSynthesisUtterance(welcome.text);
-                utterance.lang = welcome.lang;
-                utterance.rate = 0.9;
-                utterance.pitch = 1;
                 const exactVoice = voices.find(voice => voice.lang.toLowerCase() === welcome.lang.toLowerCase());
                 const languagePrefix = welcome.lang.split('-')[0].toLowerCase();
-                utterance.voice = exactVoice || voices.find(voice => voice.lang.toLowerCase().startsWith(languagePrefix)) || null;
+                const prefixVoice = voices.find(voice => voice.lang.toLowerCase().startsWith(languagePrefix));
+                // Ако устройството няма нито един глас за въпросния език (напр. рядко срещани езици
+                // като зулу или тайландски), някои браузъри (особено Chrome/Android) остават напълно
+                // безмълвни, ако едновременно зададем непозната стойност на utterance.lang И оставим
+                // voice=null. По-безопасно е тогава да вземем произволен наличен глас (дори грешен език),
+                // за да прочете текста поне с "чужд" акцент, вместо да не прозвучи нищо.
+                const chosenVoice = exactVoice || prefixVoice || voices[0] || null;
+                utterance.voice = chosenVoice;
+                utterance.lang = chosenVoice ? chosenVoice.lang : welcome.lang;
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
                 synth.resume();
                 synth.speak(utterance);
             };
@@ -3867,7 +3874,11 @@
                 gameState.aidPenalty += gameState.lastAidPenalty;
                 gameState.fuel = Math.min(100, gameState.fuel + 5);
                 const destination = COUNTRIES[gameState.currentIndex + 1];
-                primeWelcomeAudio(destination);
+                // Поздравът се стартира тук, синхронно вътре в клик-обработчика (не по-късно, в setTimeout),
+                // защото мобилните браузъри (особено iOS Safari) отменят разрешението за автоматично
+                // възпроизвеждане на звук/реч веднага щом излезем от директния "user gesture" контекст.
+                // Ако изчакаме до showCorrectModal() (която се вика чрез setTimeout), звукът може да замлъкне на телефон.
+                if(destination) speakWelcome(destination);
                 if(destination && !gameState.passport.some(country => country.code === destination.code)) {
                     gameState.passport.push(destination);
                 }
@@ -3914,7 +3925,8 @@
                 ? ` (${gameState.lastGrossReward} − ${gameState.lastAidPenalty} за жокер)`
                 : '';
             document.getElementById('reward-summary').innerText = `+${gameState.lastReward} точки${aidSummary} • Общо: ${gameState.score} • Серия: ${gameState.streak} • Гориво: ${gameState.fuel}% • Печат №${gameState.passport.length}`;
-            speakWelcome(c);
+            // Поздравът вече е стартиран по-рано, синхронно в checkAnswer() (виж коментара там) —
+            // тук само визуализираме модала, без да викаме speakWelcome() втори път.
             
             // Генерираме 1 карта на държавата + 3 снимки на забележителности
             let gridHtml = `

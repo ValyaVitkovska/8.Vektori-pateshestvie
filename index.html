@@ -3456,7 +3456,7 @@
                 get correct() { return answer; },
                 theory: `За последователни точки е изпълнено $\\vec{${o}${a}}+\\vec{${a}${b}}=\\vec{${o}${b}}$.`,
                 formula: `$\\vec{${a}${b}}=\\vec{${o}${b}}-\\vec{${o}${a}}$`,
-                solution: `$${o}${b}:${o}${a}=${multiplier}$, следователно $\\vec{${a}${b}}=(${multiplier}-1)\\vec{${o}${a}}=${answer}.`
+                solution: `$${o}${b}:${o}${a}=${multiplier}$, следователно $\\vec{${a}${b}}=(${multiplier}-1)\\vec{${o}${a}}=${coefTerm(multiplier - 1)}\\vec{${o}${a}}$.`
             };
         }
 
@@ -3568,7 +3568,7 @@
                 theory: `Задачата изисква две стъпки: първо възстановяваме $\\vec{AB}$ и $\\vec{AC}$ от дадените части, после използваме $\\vec{CM}=\\vec{CA}+\\vec{AM}$.`,
                 hint: `Понеже $M$ е среда, $\\vec{AB}=2\\vec{a}$. От $AN:NC=${r}:1$ следва $\\vec{AC}=${factor}\\vec{b}$.`,
                 formula: `$\\vec{CM}=\\vec{CA}+\\vec{AM}=-\\vec{AC}+\\vec{AM}$`,
-                solution: `$\\vec{AC}=${factor}\\vec{b}$, затова $\\vec{CM}=-${factor}\\vec{b}+\\vec{a}=${answer}.`
+                solution: `$\\vec{AC}=${factor}\\vec{b}$, затова $\\vec{CM}=-${factor}\\vec{b}+\\vec{a}=\\vec{a}-${factor}\\vec{b}$.`
             };
         }
 

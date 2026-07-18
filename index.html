@@ -2242,12 +2242,24 @@
             const audio = setWelcomeAudioSource(country);
             if(audio) {
                 ++welcomePrimeToken;
+                // audio.play() не винаги отхвърля обещанието си, когато файлът реално липсва
+                // (напр. 404) — грешката понякога пристига само чрез събитието 'error' на елемента,
+                // след като play() вече е "успял". Затова слушаме и за двете, за да не остане тихо.
+                let fellBackToSpeech = false;
+                const fallbackToSynthesis = () => {
+                    if(fellBackToSpeech) return;
+                    fellBackToSpeech = true;
+                    audio.removeEventListener('error', fallbackToSynthesis);
+                    speakWelcomeWithSynthesis(welcome);
+                };
+                audio.addEventListener('error', fallbackToSynthesis, { once: true });
                 audio.pause();
                 audio.muted = false;
                 audio.volume = 1;
                 audio.currentTime = 0;
                 const playAttempt = audio.play();
-                if(playAttempt?.catch) playAttempt.catch(() => speakWelcomeWithSynthesis(welcome));
+                if(playAttempt?.catch) playAttempt.catch(fallbackToSynthesis);
+                if(audio.error) fallbackToSynthesis();
                 return;
             }
             speakWelcomeWithSynthesis(welcome);
@@ -2968,17 +2980,35 @@
             </svg>`;
         }
 
-        function parallelogramDiagram(labels, rectangle = false) {
+        // mode = 'sum'          -> открояваме диагонала AC (резултат от сбора на две съседни страни), BD е помощен
+        // mode = 'diagonals'     -> и двата диагонала участват в израза, открояваме и двата
+        // mode = 'equal-sides'   -> открояваме двойката равни насрещни страни AB и DC
+        function parallelogramDiagram(labels, options = {}) {
+            const { rectangle = false, mode = 'sum' } = options;
             const [a, b, c, d] = labels;
             const points = rectangle ? '55,155 285,155 285,40 55,40' : '75,155 285,155 250,40 40,40';
             const coords = rectangle
                 ? [[55,155],[285,155],[285,40],[55,40]]
                 : [[75,155],[285,155],[250,40],[40,40]];
+            const [A, B, C, D] = coords;
+            let extra;
+            if (mode === 'diagonals') {
+                extra = `
+                <line class="gg-vector" x1="${A[0]}" y1="${A[1]}" x2="${C[0]}" y2="${C[1]}" marker-end="url(#arrow)"/>
+                <line class="gg-vector-green" x1="${B[0]}" y1="${B[1]}" x2="${D[0]}" y2="${D[1]}" marker-end="url(#arrow-green)"/>`;
+            } else if (mode === 'equal-sides') {
+                extra = `
+                <line class="gg-vector" x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" marker-end="url(#arrow)"/>
+                <line class="gg-vector-green" x1="${D[0]}" y1="${D[1]}" x2="${C[0]}" y2="${C[1]}" marker-end="url(#arrow-green)"/>`;
+            } else {
+                extra = `
+                <line class="gg-helper" x1="${B[0]}" y1="${B[1]}" x2="${D[0]}" y2="${D[1]}"/>
+                <line class="gg-vector-result" x1="${A[0]}" y1="${A[1]}" x2="${C[0]}" y2="${C[1]}" marker-end="url(#arrow-orange)"/>`;
+            }
             return `<svg viewBox="0 0 340 195" role="img" aria-label="${rectangle ? 'Правоъгълник' : 'Успоредник'} ${a}${b}${c}${d}">
                 ${diagramStyles}
                 <polygon points="${points}" fill="#eff6ff" stroke="#334155" stroke-width="3"/>
-                <line x1="${coords[0][0]}" y1="${coords[0][1]}" x2="${coords[2][0]}" y2="${coords[2][1]}" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrow)"/>
-                <line class="gg-helper" x1="${coords[1][0]}" y1="${coords[1][1]}" x2="${coords[3][0]}" y2="${coords[3][1]}"/>
+                ${extra}
                 ${coords.map((p, i) => pointMarkup(p[0], p[1], labels[i])).join('')}
             </svg>`;
         }
@@ -3031,13 +3061,21 @@
             </svg>`;
         }
 
-        function triangleDoubleSectionDiagram(firstLabel = 'M', secondLabel = 'N') {
-            return `<svg viewBox="0 0 340 210" role="img" aria-label="Триъгълник ABC с точки ${firstLabel} и ${secondLabel}">
+        function triangleDoubleSectionDiagram(r, firstLabel = 'M', secondLabel = 'N') {
+            // AM:MC = BN:NC = 1:r, затова M и N делят AC и BC в еднакво отношение,
+            // на разстояние t = 1/(1+r) от A и B съответно.
+            const A = {x:42,y:175}, B = {x:298,y:175}, C = {x:205,y:28};
+            const t = 1 / (1 + r);
+            const M = {x: A.x + (C.x - A.x) * t, y: A.y + (C.y - A.y) * t};
+            const N = {x: B.x + (C.x - B.x) * t, y: B.y + (C.y - B.y) * t};
+            return `<svg viewBox="0 0 340 210" role="img" aria-label="Триъгълник ABC — ${firstLabel} върху AC и ${secondLabel} върху BC, MN е успоредно на AB">
                 ${diagramStyles}
                 <polygon points="42,175 298,175 205,28" fill="#f8fafc" stroke="#334155" stroke-width="3"/>
-                <line class="gg-vector-result" x1="96" y1="124" x2="267" y2="126" marker-end="url(#arrow-orange)"/>
+                <line class="gg-vector-result" x1="${M.x}" y1="${M.y}" x2="${N.x}" y2="${N.y}" marker-end="url(#arrow-orange)"/>
                 ${pointMarkup(42,175,'A')}${pointMarkup(298,175,'B')}${pointMarkup(205,28,'C')}
-                ${pointMarkup(96,124,firstLabel,'#ea580c')}${pointMarkup(267,126,secondLabel,'#ea580c')}
+                ${pointMarkup(M.x,M.y,firstLabel,'#ea580c')}${pointMarkup(N.x,N.y,secondLabel,'#ea580c')}
+                <text x="${(A.x + M.x) / 2 - 6}" y="${(A.y + M.y) / 2 + 12}" text-anchor="middle" font-size="12" fill="#475569">1</text>
+                <text x="${(B.x + N.x) / 2 + 6}" y="${(B.y + N.y) / 2 + 12}" text-anchor="middle" font-size="12" fill="#475569">1</text>
             </svg>`;
         }
 
@@ -3053,13 +3091,19 @@
         }
 
         function finalChallengeDiagram() {
-            return `<svg viewBox="0 0 340 215" role="img" aria-label="Финална задача с триъгълник ABC и точки M и N">
+            // A(42,178), B(298,178), C(205,28); M е среда на AB; N лежи на AC с AN:NC = 3:1,
+            // затова N = A + 0.75*(C-A). Търсеният вектор е CM (от C до M).
+            const A = {x:42,y:178}, C = {x:205,y:28};
+            const N = {x: A.x + (C.x - A.x) * 0.75, y: A.y + (C.y - A.y) * 0.75};
+            return `<svg viewBox="0 0 340 215" role="img" aria-label="Триъгълник ABC — M е среда на AB, N е върху AC с AN:NC=3:1, търсим вектор CM">
                 ${diagramStyles}
                 <polygon points="42,178 298,178 205,28" fill="#fff7ed" stroke="#334155" stroke-width="3"/>
-                <line class="gg-vector-result" x1="170" y1="178" x2="164" y2="91" marker-end="url(#arrow-orange)"/>
-                <line class="gg-helper" x1="170" y1="178" x2="205" y2="28"/>
+                <line class="gg-helper" x1="${N.x}" y1="${N.y}" x2="205" y2="28"/>
+                <line class="gg-vector-result" x1="205" y1="28" x2="170" y2="178" marker-end="url(#arrow-orange)"/>
                 ${pointMarkup(42,178,'A')}${pointMarkup(298,178,'B')}${pointMarkup(205,28,'C')}
-                ${pointMarkup(170,178,'M','#ea580c')}${pointMarkup(164,91,'N','#ea580c')}
+                ${pointMarkup(170,178,'M','#ea580c')}${pointMarkup(N.x,N.y,'N','#16a34a')}
+                <text x="${(42 + N.x) / 2 - 10}" y="${(178 + N.y) / 2 + 6}" text-anchor="middle" font-size="12" fill="#475569">3</text>
+                <text x="${(N.x + 205) / 2 + 12}" y="${(N.y + 28) / 2 + 4}" text-anchor="middle" font-size="12" fill="#475569">1</text>
             </svg>`;
         }
 
@@ -3227,7 +3271,7 @@
                 type: 'rectangle',
                 difficulty: 'medium',
                 text: `Даден е правоъгълник $${a}${b}${c}${d}$. На кой вектор е равен изразът $${v.expression}$?`,
-                diagram: parallelogramDiagram([a,b,c,d], true),
+                diagram: parallelogramDiagram([a,b,c,d], { rectangle: true, mode: 'diagonals' }),
                 options: shuffle(v.options),
                 get correct() { return v.answer; },
                 theory: `В правоъгълника използваме правилото на многоъгълника и равенствата между векторите по срещуположните страни. Диагоналът е сбор от двата съседни вектора.`,
@@ -3324,7 +3368,7 @@
             return {
                 type: 'equal-vectors', difficulty: 'easy',
                 text: `Даден е успоредник $${a}${b}${c}${d}$. Кой вектор е равен на $\\vec{${a}${b}}$?`,
-                diagram: parallelogramDiagram([a,b,c,d]),
+                diagram: parallelogramDiagram([a,b,c,d], { mode: 'equal-sides' }),
                 options: shuffle([answer, `$\\vec{${c}${d}}$`, `$\\vec{${b}${c}}$`, `$\\vec{${a}${d}}$`]),
                 get correct() { return answer; },
                 theory: `В успоредник векторите по срещуположните страни са равни, когато са еднакво насочени.`,
@@ -3373,7 +3417,7 @@
             return {
                 type: 'diagonal-identity', difficulty: 'medium',
                 text: `В успоредника $${a}${b}${c}${d}$ опростете сбора $\\vec{${a}${c}}+\\vec{${b}${d}}$.`,
-                diagram: parallelogramDiagram([a,b,c,d]),
+                diagram: parallelogramDiagram([a,b,c,d], { mode: 'diagonals' }),
                 options: shuffle([answer, `$2\\vec{${a}${b}}$`, `$\\vec{${a}${c}}$`, `$\\vec{0}$`]),
                 get correct() { return answer; },
                 theory: `Представяме диагоналите чрез двата вектора по съседните страни на успоредника.`,
@@ -3420,7 +3464,7 @@
             return {
                 type: 'parallel-sections', difficulty: 'hard',
                 text: `<strong class="text-rose-700">Задача с повишена трудност:</strong> В $\\triangle ABC$ точките $M\\in AC$ и $N\\in BC$ са такива, че $AM:MC=BN:NC=1:${r}$. Изразете $\\vec{MN}$ чрез $\\vec{AB}$.`,
-                diagram: triangleDoubleSectionDiagram('M','N'),
+                diagram: triangleDoubleSectionDiagram(r, 'M','N'),
                 options: shuffle([answer, `$\\frac1{${sum}}\\vec{AB}$`, `$-\\frac{${r}}{${sum}}\\vec{AB}$`, `$\\frac{${sum}}{${r}}\\vec{AB}$`]),
                 get correct() { return answer; },
                 theory: `Точките делят двете страни в еднакво отношение, затова $MN\\parallel AB$. Коефициентът се намира от подобните триъгълници.`,
@@ -3494,7 +3538,11 @@
         function buildGeneratorPlan() {
             if (gameMode === 'demo') {
                 const easyPick = shuffle(generators.slice(0, 5))[0];
-                const additionSubtraction = generators[8]; // genVectorChain — събиране/изваждане на вектори, с чертеж
+                // Задача със събиране/изваждане на вектори, с чертеж — genSimplify (опростяване на израз с a, b)
+                // или genVectorChain (верига от именувани вектори). Избираме на случаен принцип измежду двете,
+                // за да не се пада винаги един и същ тип при ново стартиране на демото.
+                const additionSubtractionPool = [generators[5], generators[8]];
+                const additionSubtraction = shuffle(additionSubtractionPool)[0];
                 const mediumPool = generators.slice(5, 12).filter(g => g !== additionSubtraction);
                 const mediumPick = shuffle(mediumPool)[0];
                 const hardPick = shuffle(generators.slice(12, 19))[0]; // задача с повишена трудност, с чертеж

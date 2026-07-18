@@ -1625,6 +1625,10 @@
                     <p>Няма нищо — оставаме в текущата държава. Нека заедно открием правилния подход.</p>
                 </div>
             </div>
+            <div id="wrong-fuel-banner" class="hidden mt-3 mb-1 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold flex items-center gap-3" role="status">
+                <span class="text-2xl" aria-hidden="true">⛽</span>
+                <span>Горивото е на нула! Гео предлага безплатна аварийна задача — тя не отнема точки и при верен отговор връща 25% гориво.</span>
+            </div>
             <div class="space-y-6">
                 <div class="bg-blue-50/50 p-5 rounded-2xl border border-blue-100">
                     <h3 class="font-bold text-blue-900 mb-2 flex items-center gap-2 text-sm uppercase tracking-wider"><span>📚</span> Гео припомня</h3>
@@ -3906,10 +3910,17 @@
             let tEl = document.getElementById('theory-content'); tEl.innerHTML = q.theory;
             let sEl = document.getElementById('solution-content'); sEl.innerHTML = q.solution;
             const actionButton = document.getElementById('similar-question-button');
-            actionButton.innerText = gameState.emergencyPending
+            const fuelBanner = document.getElementById('wrong-fuel-banner');
+            const isEmergency = gameState.emergencyPending;
+            actionButton.innerText = isEmergency
                 ? '⛽ Към аварийната задача'
                 : '🔄 Дай ми подобна задача';
-            
+            actionButton.classList.toggle('bg-blue-600', !isEmergency);
+            actionButton.classList.toggle('hover:bg-blue-700', !isEmergency);
+            actionButton.classList.toggle('bg-amber-500', isEmergency);
+            actionButton.classList.toggle('hover:bg-amber-600', isEmergency);
+            fuelBanner.classList.toggle('hidden', !isEmergency);
+
             renderMathSafely(tEl);
             renderMathSafely(sEl);
             showModal('modal-wrong');
